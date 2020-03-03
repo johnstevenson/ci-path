@@ -1,0 +1,11 @@
+os: windows
+language: shell
+
+git:
+  depth: 5
+
+before_script:
+  - powershell -Command Set-ExecutionPolicy Bypass
+
+script:
+  - powershell -File paths.ps1

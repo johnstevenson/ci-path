@@ -1,0 +1,32 @@
+name: Path Report
+# comment
+on:
+  - pull_request
+  - push
+jobs:
+  test:
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+      fail-fast: false
+    name: PATH on ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Report paths from pwsh
+        run: .\paths.ps1
+        shell: pwsh
+
+      - name: Report paths from bash
+        run: pwsh -File paths.ps1
+        shell: bash
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v1
+        with:
+          name: logs
+          path: logs
