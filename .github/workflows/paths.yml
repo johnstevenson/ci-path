@@ -1,8 +1,11 @@
 name: Path Report
 # comment
 on:
-  - pull_request
-  - push
+  push:
+    branches:
+    - master
+    paths-ignore:
+    - '*.md'
 jobs:
   test:
 
