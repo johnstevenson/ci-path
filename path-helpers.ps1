@@ -99,11 +99,17 @@ function Get-PathCommands([System.Collections.ArrayList]$paths, [object]$stats, 
 
     $data = @{}
     $exeList = New-Object System.Collections.ArrayList
+    $errors = 0
 
     foreach ($path in $paths) {
 
         if (-not $IsWindows -and -not $config.unixHasStat) {
-            Get-UnixExecutables $path $exeList
+
+            if (-not (Get-UnixExecutables $path $exeList)) {
+                $errors += 1
+                continue
+            }
+
         }
 
         $fileList = Get-ChildItem -Path $path -File
@@ -127,6 +133,10 @@ function Get-PathCommands([System.Collections.ArrayList]$paths, [object]$stats, 
     }
 
     $stats.Commands = $data.Keys.Count
+
+    if ($errors -ne 0) {
+        $stats.Add('PermissionErrors', $errors)
+    }
     return $data
 }
 
@@ -198,7 +208,7 @@ function Get-RuntimeInfo([string]$module, [bool]$isUnixy, [string]$reportName) {
     $stats = [ordered]@{
         Module = $module;
         Platform = $platform;
-        OS = $os;
+        OSVersion = $os;
         IsUnixy = $isUnixy;
         Powershell = "$($PSVersionTable.PSEdition) $($PSVersionTable.PSVersion)"
         ReportName = $reportName;
@@ -218,13 +228,19 @@ function Get-UnixExecutables([string]$path, [System.Collections.ArrayList]$names
     $names.Clear()
 
     # Redirecting stderr will throw an error on access violations
-    $lines = ls -l $path 2> $null
+    try {
+        $lines = ls -l $path 2> $null
+    } catch {
+        return $false
+    }
 
     foreach ($line in $lines) {
         if ($line -match '^[-l].{8}x') {
             $names.Add(($line -split '\s+')[8]) | Out-Null
         }
     }
+
+    return $true
 }
 
 function Get-ValidPaths([System.Collections.ArrayList]$data, [object]$stats) {
