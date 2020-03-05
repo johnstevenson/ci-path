@@ -142,6 +142,8 @@ function Get-PathCommands([System.Collections.ArrayList]$paths, [object]$stats, 
 
 function Get-ProcessList([System.Collections.ArrayList]$list) {
 
+    $id = $null
+    $path = $null
     $parentId = $null
 
     if ($list.Count -eq 0) {
@@ -150,7 +152,7 @@ function Get-ProcessList([System.Collections.ArrayList]$list) {
         $id = $list[$list.Count - 1].ParentId
     }
 
-    if (-not $id) {
+    if ($null -eq $id) {
         return $false
     }
 
@@ -178,8 +180,11 @@ function Get-ProcessList([System.Collections.ArrayList]$list) {
         return $false
     }
 
-    $list.Add(@{ Id = $id; Path = $path; ParentId = $parentId }) | Out-Null
-    return ($null -ne $parentId -and 1 -ne $parentId)
+    $path = [System.IO.Path]::GetFullPath($path)
+
+    $row = [PSCustomObject]@{ Pid = "$id"; ParentId = $parentId; ProcessName = $path; }
+    $list.Add($row) | Out-Null
+    return ($null -ne $parentId)
 }
 
 function Get-ReportName([string]$name) {
@@ -289,12 +294,23 @@ function Get-ValidPaths([System.Collections.ArrayList]$data, [object]$stats) {
 function Initialize-App([string]$basePath, [object]$config) {
 
     $procList = New-Object System.Collections.ArrayList
+    $parents = New-Object System.Collections.ArrayList
+
+    # Get the process list
     while (Get-ProcessList $procList) {}
-    #Write-Host ($procList | Select-Object Id, ParentId, Path | Out-String)
+
+    foreach ($proc in $procList) {
+        if ($null -ne $proc.ParentId -and $proc.ParentId -gt 1) {
+            $parents.Add($proc.ProcessName) | Out-Null
+        }
+    }
+
+    $procList.Reverse()
+    $config.procTree = $procList
 
     # Get defaults and remove first item
-    $pathInfo = Get-Item -LiteralPath $procList[0].Path
-    $procList.RemoveAt(0);
+    $pathInfo = Get-Item -LiteralPath $parents[0]
+    $parents.RemoveAt(0);
 
     $data = @{
         module = $pathInfo.FullName;
@@ -302,14 +318,14 @@ function Initialize-App([string]$basePath, [object]$config) {
     }
 
     if ($IsWindows) {
-        if (Test-WinUnixyShell $procList $data) {
+        if (Test-WinUnixyShell $parents $data) {
             $config.isUnixy = $true
         } else {
-            Test-WinNativeShell $procList $data
+            Test-WinNativeShell $parents $data
         }
     } else {
         $config.unixHasStat = ($null -ne $pathInfo.UnixMode)
-        Test-UnixShell $procList $data
+        Test-UnixShell $parents $data
     }
 
     $reportName = Get-ReportName $data.name
@@ -379,9 +395,8 @@ function Test-UnixShell([System.Collections.ArrayList]$parents, [object]$data) {
     $lastMatch = ''
     $lastPath = ''
 
-    foreach ($item in $parents) {
+    foreach ($path in $parents) {
 
-        $path = $item.Path
         $testPath = $path.ToLower()
 
         # Looks for ...sh filenames
@@ -405,10 +420,9 @@ function Test-WinNativeShell([System.Collections.ArrayList]$parents, [object]$da
     $lastMatch = ''
     $lastPath = ''
 
-    foreach ($item in $parents) {
+    foreach ($path in $parents) {
 
         $currentMatch = ''
-        $path = $item.Path
         $pathInfo = Get-Item -LiteralPath $path
         $testPath = $pathInfo.Name.ToLower()
 
@@ -439,10 +453,9 @@ function Test-WinUnixyShell([System.Collections.ArrayList]$parents, [object]$dat
     $lastMatch = ''
     $lastPath = ''
 
-    foreach ($item in $parents) {
+    foreach ($path in $parents) {
 
         $currentMatch = ''
-        $path = $item.Path
         $pathInfo = Get-Item -LiteralPath $path
         $testPath = (Join-Path $pathInfo.DirectoryName $pathInfo.BaseName).ToLower()
 

@@ -1,3 +1,4 @@
+#Requires -Version 5.0
 $ErrorActionPreference = 'Stop';
 
 $workDir = Split-Path $MyInvocation.MyCommand.Definition
@@ -14,13 +15,19 @@ $app = @{
     isUnixy = $false;                               # Windows unixy shell
     unixHasStat = $false                            # If FileInfo has UnixMode member
     report = '';                                    # The report name based on the shell
+    procTree = $null                                # The process tree
 }
 
-$appIntro = Initialize-App $workDir $app
+$runtime = Initialize-App $workDir $app
 
 # Output intro
-Write-Output "Generating PATH report for:"
-$out = Get-OutputList $appIntro
+Write-Output "Generating PATH report: $($runtime.ReportName)`n"
+
+# Output runtime
+$title = 'Runtime information'
+$out = Get-OutputList $runtime $title
+$data = $app.procTree | Format-Table -Property Pid, ProcessName -AutoSize| Out-String
+$out += Get-OutputString $data
 
 Set-Content -Path $app.report -Value $out
 Write-Output $out
